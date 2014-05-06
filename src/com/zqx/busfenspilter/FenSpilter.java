@@ -14,25 +14,66 @@ import com.zqx.busfenspilter.model.InoutInfo;
 import com.zqx.busfenspilter.model.StationInfo;
 
 public class FenSpilter {
+	
+	public static final int DOWNSTART = 1;
+	public static final int DOWNEND = 2;
+	public static final int UPSTART = 3;
+	public static final int UPEND = 4;
 
 	public static void main(String[] args) {
 		try {
-			String table = "tb_inout_gps_0401_gpsmixed";
+			String table = "tb_test_fen";
 			Connection con = DBConnector.getConnection();
 			
 			List<Long> productList = getProductList(con, table);
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
 			for (Long productid: productList) {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
-				for (InoutInfo info: daylist) {
-					System.out.println(info.productid + "=======" + info.stationnum + "=======" + info.date.toLocaleString());
-				}
+				processData(con, 0, daylist, stationInfoMap);
 			}
-			
-			
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
+	}
+
+	
+	public static void processData(Connection con, int startnum, List<InoutInfo> daylist, HashMap<String, StationInfo> stationInfoMap) {
+		int lastStaNum = -1;
+		for (int i=startnum;i<daylist.size();i++) {
+			StationInfo sInfo = stationInfoMap.get(daylist.get(i).routeid);
+			InoutInfo info = daylist.get(i);
+			if (i == 0) {
+				lastStaNum = info.stationnum;
+				insertData(info, DOWNSTART);
+				daylist.remove(i);
+			} else {
+				if (info.stationnum == lastStaNum) {
+					daylist.remove(i);
+					continue;
+				} else if (info.stationnum > lastStaNum && info.stationnum != sInfo.downstart && info.stationnum != sInfo.downend && info.stationnum != sInfo.upstart && info.stationnum != sInfo.upend) {
+					lastStaNum = info.stationnum;
+					daylist.remove(i);
+					continue;
+				} else if (info.stationnum > lastStaNum && (info.stationnum == sInfo.downstart || info.stationnum == sInfo.downend || info.stationnum == sInfo.upstart || info.stationnum == sInfo.upend)) {
+					if (info.stationnum == sInfo.downstart) {
+						insertData(info, DOWNSTART);
+						daylist.remove(i);
+					} else if (info.stationnum == sInfo.upstart) {
+						insertData(info, UPSTART);
+						daylist.remove(i);
+					}
+					lastStaNum = info.stationnum;
+				} else if (info.stationnum < lastStaNum) {
+					processData(con, i, daylist, stationInfoMap);
+				} else {
+					insertData(info, 11111);
+				}
+			}
+		}
+	}
+
+	public static void insertData(InoutInfo info, int up) {
+		System.out.println(info.rowid + "====" + info.stationnum + "====" + info.date.toLocaleString() + "====" + up);
 	}
 
 	public static List<Long> getProductList(Connection con, String table) {
@@ -85,6 +126,7 @@ public class FenSpilter {
 			ResultSet rs = query(st, sql);
 			while (rs.next()) {
 				InoutInfo info = new InoutInfo();
+				info.rowid = rs.getLong("ROWID");
 				info.productid = rs.getLong("PRODUCTID");
 				info.routeid = rs.getString("ROUTEID");
 				info.stationnum = rs.getInt("STATIONSEQNUM");

@@ -3,6 +3,7 @@ package com.zqx.busfenspilter.model;
 import java.util.Date;
 
 public class InoutInfo {
+	public long rowid;
 	public long productid;
 	public String routeid;
 	public int stationnum;
