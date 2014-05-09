@@ -22,11 +22,18 @@ public class FenSpilter {
 
 	public static void main(String[] args) {
 		try {
-			String table = "tb_test_fen";
+			
+			//此处指定程序处理的表名
+			String table = "tb_inout_gps_103";
 			Connection con = DBConnector.getConnection();
 			
+			//获取一天的车辆清单
 			List<Long> productList = getProductList(con, table);
+			
+			//获取站点分割信息
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
+			
+			//遍历车辆列表，取出每辆车一天的数据进行处理
 			for (Long productid: productList) {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
 				processData(con, 0, daylist, stationInfoMap);
@@ -36,44 +43,77 @@ public class FenSpilter {
 		}
 	}
 
-	
+	/**
+	 * 班次分割算法
+	 * @param con   数据库连接
+	 * @param startnum 递归开始时，列表开始遍历的位置
+	 * @param daylist  一辆车一天按时间排序的数据
+	 * @param stationInfoMap  记录站点分割信息，String 为站点号 StationInfo为站点分割信息（分为四个值，下行开始结束，上行开始结束）
+	 */
 	public static void processData(Connection con, int startnum, List<InoutInfo> daylist, HashMap<String, StationInfo> stationInfoMap) {
-		int lastStaNum = -1;
-		for (int i=startnum;i<daylist.size();i++) {
-			StationInfo sInfo = stationInfoMap.get(daylist.get(i).routeid);
-			InoutInfo info = daylist.get(i);
-			if (i == 0) {
-				lastStaNum = info.stationnum;
-				insertData(info, DOWNSTART);
-				daylist.remove(i);
-			} else {
-				if (info.stationnum == lastStaNum) {
-					daylist.remove(i);
-					continue;
-				} else if (info.stationnum > lastStaNum && info.stationnum != sInfo.downstart && info.stationnum != sInfo.downend && info.stationnum != sInfo.upstart && info.stationnum != sInfo.upend) {
-					lastStaNum = info.stationnum;
-					daylist.remove(i);
-					continue;
-				} else if (info.stationnum > lastStaNum && (info.stationnum == sInfo.downstart || info.stationnum == sInfo.downend || info.stationnum == sInfo.upstart || info.stationnum == sInfo.upend)) {
-					if (info.stationnum == sInfo.downstart) {
-						insertData(info, DOWNSTART);
-						daylist.remove(i);
-					} else if (info.stationnum == sInfo.upstart) {
-						insertData(info, UPSTART);
-						daylist.remove(i);
-					}
-					lastStaNum = info.stationnum;
-				} else if (info.stationnum < lastStaNum) {
-					processData(con, i, daylist, stationInfoMap);
-				} else {
-					insertData(info, 11111);
-				}
-			}
-		}
+		
+		
+		
+		
+		
+		
+//		int lastStaNum = -1;
+//		InoutInfo lastInfo = null;
+//		int count = 0;
+//		
+//		boolean isRecorded = false;
+//		
+//		for (int i=startnum;i<daylist.size();i++) {
+//			StationInfo sInfo = stationInfoMap.get(daylist.get(i).routeid);
+//			InoutInfo info = daylist.get(i);
+//			//判断如果是本辆车本日第一条记录
+//			if (i == 0) {
+//				//如果不是上行结束站点，则记录班次，否则丢弃
+//				if(info.stationnum != sInfo.upend) {
+//					lastStaNum = info.stationnum;
+//					insertData(info, 1);
+//					processData(con, i + 1, daylist, stationInfoMap);
+//					break;
+//				}
+//			} else {
+//				//判断如果本条记录与上一条记录站点号相同，则认为是同一个到离站数据，丢弃
+//				if (info.stationnum == lastStaNum) {
+//					continue;
+//				} else if (info.stationnum > lastStaNum && (info.stationnum == sInfo.downstart || info.stationnum == sInfo.upstart)) {
+//					//判断如果本条记录与下行开始站点或上行开始站点相同，则记录数据
+//					if (info.stationnum == sInfo.downstart) {
+//						insertData(info, DOWNSTART);
+//						processData(con, i + 1, daylist, stationInfoMap);
+//						break;
+//					} else if (info.stationnum == sInfo.upstart) {
+//						insertData(info, UPSTART);
+//						processData(con, i + 1, daylist, stationInfoMap);
+//						break;
+//					}
+//					lastStaNum = info.stationnum;
+//				} else if (info.stationnum > lastStaNum && info.stationnum > sInfo.downstart && info.stationnum < sInfo.downend) {
+//					//如果本条记录比上一条记录站点号大，且本条记录站点号位于下行区间，则继续向下查找
+//					lastStaNum = info.stationnum;
+//					count++;
+//					lastInfo = info;
+//					continue;
+//				} else if (info.stationnum > lastStaNum && info.stationnum > sInfo.upstart && info.stationnum < sInfo.upend) {
+//					//如果本条记录比上一条记录站点号大，且本条记录站点号位于上行区间，则继续向下查找
+//					lastStaNum = info.stationnum;
+//					count++;
+//					lastInfo = info;
+//					continue;
+//				} else if (info.stationnum < lastStaNum) {
+//					//如果本条记录比上一条记录站点号小，则进行递归
+//					processData(con, i, daylist, stationInfoMap);
+//					break;
+//				}
+//			}
+//		}
 	}
 
 	public static void insertData(InoutInfo info, int up) {
-		System.out.println(info.rowid + "====" + info.stationnum + "====" + info.date.toLocaleString() + "====" + up);
+		System.out.println(info.rowid + "====" + info.stationnum + "====" + info.productid +"========" + info.date.toLocaleString() + "====" + up);
 	}
 
 	public static List<Long> getProductList(Connection con, String table) {
