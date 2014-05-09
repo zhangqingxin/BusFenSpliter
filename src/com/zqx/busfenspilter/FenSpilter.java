@@ -22,18 +22,10 @@ public class FenSpilter {
 
 	public static void main(String[] args) {
 		try {
-			
-			//´Ë´¦Ö¸¶¨³ÌĞò´¦ÀíµÄ±íÃû
 			String table = "tb_inout_gps_103";
 			Connection con = DBConnector.getConnection();
-			
-			//»ñÈ¡Ò»ÌìµÄ³µÁ¾Çåµ¥
 			List<Long> productList = getProductList(con, table);
-			
-			//»ñÈ¡Õ¾µã·Ö¸îĞÅÏ¢
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
-			
-			//±éÀú³µÁ¾ÁĞ±í£¬È¡³öÃ¿Á¾³µÒ»ÌìµÄÊı¾İ½øĞĞ´¦Àí
 			for (Long productid: productList) {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
 				processData(con, 0, daylist, stationInfoMap);
@@ -43,16 +35,28 @@ public class FenSpilter {
 		}
 	}
 
-	/**
-	 * °à´Î·Ö¸îËã·¨
-	 * @param con   Êı¾İ¿âÁ¬½Ó
-	 * @param startnum µİ¹é¿ªÊ¼Ê±£¬ÁĞ±í¿ªÊ¼±éÀúµÄÎ»ÖÃ
-	 * @param daylist  Ò»Á¾³µÒ»Ìì°´Ê±¼äÅÅĞòµÄÊı¾İ
-	 * @param stationInfoMap  ¼ÇÂ¼Õ¾µã·Ö¸îĞÅÏ¢£¬String ÎªÕ¾µãºÅ StationInfoÎªÕ¾µã·Ö¸îĞÅÏ¢£¨·ÖÎªËÄ¸öÖµ£¬ÏÂĞĞ¿ªÊ¼½áÊø£¬ÉÏĞĞ¿ªÊ¼½áÊø£©
-	 */
 	public static void processData(Connection con, int startnum, List<InoutInfo> daylist, HashMap<String, StationInfo> stationInfoMap) {
 		
+		InoutInfo lastinout = null;
 		
+		for (int i=startnum; i<daylist.size();i++) {
+			InoutInfo inout = daylist.get(i);
+			StationInfo sInfo = stationInfoMap.get(inout.routeid);
+			//åˆ¤æ–­æ˜¯å¦æ˜¯ä¸Šè¡Œç»“æŸçš„æ ‡å¿—ï¼Œå¦‚æœæ˜¯åˆ™è·³è¿‡
+			if (i==0 && inout.stationnum == sInfo.upend) {
+				continue;
+			}
+			
+			//å¦‚æœXi>Xi-1ä¸”Xi<Bï¼Œåˆ¤æ–­åœ¨æœ¬ç­æ¬¡ä¸­ï¼Œåˆ™è·³è¿‡
+			if (lastinout == null || (lastinout != null && inout.stationnum > lastinout.stationnum && inout.stationnum < sInfo.downend)) {
+				lastinout = inout;
+				continue;
+			}
+			//å¦‚æœXi<Xi-1ä¸”Xi<Bï¼Œåˆ™è¯´æ˜æ•°æ®å‘ç”Ÿäº†é”™ä¹±ï¼Œé‡æ–°è¿›è¡Œé€’å½’
+			if (lastinout != null && inout.stationnum < lastinout.stationnum && inout.stationnum < sInfo.downend) {
+				processData(con, i, daylist, stationInfoMap);
+			}
+		}
 		
 		
 		
@@ -66,9 +70,7 @@ public class FenSpilter {
 //		for (int i=startnum;i<daylist.size();i++) {
 //			StationInfo sInfo = stationInfoMap.get(daylist.get(i).routeid);
 //			InoutInfo info = daylist.get(i);
-//			//ÅĞ¶ÏÈç¹ûÊÇ±¾Á¾³µ±¾ÈÕµÚÒ»Ìõ¼ÇÂ¼
 //			if (i == 0) {
-//				//Èç¹û²»ÊÇÉÏĞĞ½áÊøÕ¾µã£¬Ôò¼ÇÂ¼°à´Î£¬·ñÔò¶ªÆú
 //				if(info.stationnum != sInfo.upend) {
 //					lastStaNum = info.stationnum;
 //					insertData(info, 1);
@@ -76,11 +78,9 @@ public class FenSpilter {
 //					break;
 //				}
 //			} else {
-//				//ÅĞ¶ÏÈç¹û±¾Ìõ¼ÇÂ¼ÓëÉÏÒ»Ìõ¼ÇÂ¼Õ¾µãºÅÏàÍ¬£¬ÔòÈÏÎªÊÇÍ¬Ò»¸öµ½ÀëÕ¾Êı¾İ£¬¶ªÆú
 //				if (info.stationnum == lastStaNum) {
 //					continue;
 //				} else if (info.stationnum > lastStaNum && (info.stationnum == sInfo.downstart || info.stationnum == sInfo.upstart)) {
-//					//ÅĞ¶ÏÈç¹û±¾Ìõ¼ÇÂ¼ÓëÏÂĞĞ¿ªÊ¼Õ¾µã»òÉÏĞĞ¿ªÊ¼Õ¾µãÏàÍ¬£¬Ôò¼ÇÂ¼Êı¾İ
 //					if (info.stationnum == sInfo.downstart) {
 //						insertData(info, DOWNSTART);
 //						processData(con, i + 1, daylist, stationInfoMap);
@@ -92,19 +92,16 @@ public class FenSpilter {
 //					}
 //					lastStaNum = info.stationnum;
 //				} else if (info.stationnum > lastStaNum && info.stationnum > sInfo.downstart && info.stationnum < sInfo.downend) {
-//					//Èç¹û±¾Ìõ¼ÇÂ¼±ÈÉÏÒ»Ìõ¼ÇÂ¼Õ¾µãºÅ´ó£¬ÇÒ±¾Ìõ¼ÇÂ¼Õ¾µãºÅÎ»ÓÚÏÂĞĞÇø¼ä£¬Ôò¼ÌĞøÏòÏÂ²éÕÒ
 //					lastStaNum = info.stationnum;
 //					count++;
 //					lastInfo = info;
 //					continue;
 //				} else if (info.stationnum > lastStaNum && info.stationnum > sInfo.upstart && info.stationnum < sInfo.upend) {
-//					//Èç¹û±¾Ìõ¼ÇÂ¼±ÈÉÏÒ»Ìõ¼ÇÂ¼Õ¾µãºÅ´ó£¬ÇÒ±¾Ìõ¼ÇÂ¼Õ¾µãºÅÎ»ÓÚÉÏĞĞÇø¼ä£¬Ôò¼ÌĞøÏòÏÂ²éÕÒ
 //					lastStaNum = info.stationnum;
 //					count++;
 //					lastInfo = info;
 //					continue;
 //				} else if (info.stationnum < lastStaNum) {
-//					//Èç¹û±¾Ìõ¼ÇÂ¼±ÈÉÏÒ»Ìõ¼ÇÂ¼Õ¾µãºÅĞ¡£¬Ôò½øĞĞµİ¹é
 //					processData(con, i, daylist, stationInfoMap);
 //					break;
 //				}
