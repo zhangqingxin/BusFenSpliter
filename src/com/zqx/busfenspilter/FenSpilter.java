@@ -28,6 +28,7 @@ public class FenSpilter {
 			Connection con = DBConnector.getConnection();
 			List<Long> productList = getProductList(con, table);
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
+			long time = System.currentTimeMillis();
 			for (Long productid: productList) {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
 				con.setAutoCommit(false);
@@ -35,6 +36,7 @@ public class FenSpilter {
 				con.commit();
 				con.setAutoCommit(true);
 			}
+			System.out.println("Time: " + (System.currentTimeMillis() - time) + " ms");
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
@@ -80,7 +82,7 @@ public class FenSpilter {
 					count = daylist.size();
 				}
 				int breakpoint = -1;
-				for (int j=i+1;j<=count;j++) {
+				for (int j=i+1;j<count;j++) {
 					//判断，如果当前数据是在下行班次中，而且向下读取的数据存在上行班次的数据，则记录最后一个上行数据的位置
 					if (inout.inRangeAB(sInfo)) {
 						if (daylist.get(j).inRangeCD(sInfo)) {
