@@ -22,8 +22,14 @@ public class FenSpilter {
 	public static final int UPEND = 4;
 
 	public static void main(String[] args) {
+		String table = "tb_inout_gps_0327_gpsmixed";
+		long time = System.currentTimeMillis();
+	    fenData(table);
+	    System.out.println("Total Time: " + (System.currentTimeMillis() - time) + "ms");
+	}
+
+	public static void fenData(String table) {
 		try {
-			String table = "tb_fen_test";
 			Connection con = DBConnector.getConnection();
 			List<Long> productList = getProductList(con, table);
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
@@ -32,6 +38,12 @@ public class FenSpilter {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
 				
 				con.setAutoCommit(false);
+				
+				//如果没有本线路班次分割标识，则跳过
+				if (daylist.size() == 0 || !stationInfoMap.containsKey(daylist.get(0).routeid)) {
+					continue;
+				}
+				
 				sInoutList.clear();
 				//处理数据
 				processData(con, 0, daylist, stationInfoMap);
@@ -40,7 +52,8 @@ public class FenSpilter {
 				if (sInoutList.size() == 0) {
 					if (daylist.size() > 1) {
 						InoutInfo in = daylist.get(0);
-						if (in.inRangeAB(stationInfoMap.get(in.routeid))) {
+						StationInfo sInInfo = stationInfoMap.get(in.routeid);
+						if (sInInfo != null && in.inRangeAB(sInInfo)) {
 							in.flagUpordown = 1;
 							sInoutList.add(in);
 						} else {
@@ -48,7 +61,8 @@ public class FenSpilter {
 							sInoutList.add(in);
 						}
 						InoutInfo out = daylist.get(daylist.size() - 1);
-						if (out.inRangeAB(stationInfoMap.get(out.routeid))) {
+						StationInfo sOutInfo = stationInfoMap.get(out.routeid);
+						if (sOutInfo != null && out.inRangeAB(sOutInfo)) {
 							out.flagUpordown = 2;
 							sInoutList.add(out);
 						} else {
@@ -79,11 +93,18 @@ public class FenSpilter {
 		
 		for (int i=startnum; i<daylist.size();i++) {
 			InoutInfo inout = daylist.get(i);
+			if (inout.routeid.equals("-1")) {
+				continue;
+			}
 			StationInfo sInfo = stationInfoMap.get(inout.routeid);
+			if (sInfo == null) {
+				continue;
+			}
 //			System.out.println("downStart: " + sInfo.downstart +"   downEnd: " + sInfo.downend + "    upStart: " + sInfo.upstart + "     upEnd: " + sInfo.upend);
 			if (lastinout != null && inout.stationnum == lastinout.stationnum) {
 				continue;
 			}
+			
 			//处理首尾数据
 			if (i<=1 && (inout.stationnum == sInfo.upend || inout.stationnum == sInfo.downend)) {
 				continue;
