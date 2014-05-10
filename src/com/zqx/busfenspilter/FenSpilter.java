@@ -1,14 +1,13 @@
 package com.zqx.busfenspilter;
 
 import java.sql.Connection;
-import java.sql.Date;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 
@@ -31,8 +30,40 @@ public class FenSpilter {
 			long time = System.currentTimeMillis();
 			for (Long productid: productList) {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
+				
 				con.setAutoCommit(false);
+				sInoutList.clear();
+				//处理数据
 				processData(con, 0, daylist, stationInfoMap);
+
+				//处理完之后没有任何班次信息，则运行如下逻辑（用于处理类似于3月26日130-102274的区间车问题）
+				if (sInoutList.size() == 0) {
+					if (daylist.size() > 1) {
+						InoutInfo in = daylist.get(0);
+						if (in.inRangeAB(stationInfoMap.get(in.routeid))) {
+							in.flagUpordown = 1;
+							sInoutList.add(in);
+						} else {
+							in.flagUpordown = 3;
+							sInoutList.add(in);
+						}
+						InoutInfo out = daylist.get(daylist.size() - 1);
+						if (out.inRangeAB(stationInfoMap.get(out.routeid))) {
+							out.flagUpordown = 2;
+							sInoutList.add(out);
+						} else {
+							out.flagUpordown = 4;
+							sInoutList.add(out);
+						}
+					}
+				}
+				
+				//数据重新按照时间排序
+				Collections.sort(sInoutList, new ComparatorTime());
+				for (InoutInfo info: sInoutList) {
+					insertData(con, info, info.flagUpordown);
+				}
+				
 				con.commit();
 				con.setAutoCommit(true);
 			}
@@ -58,13 +89,13 @@ public class FenSpilter {
 				continue;
 			} else if (inout.stationnum == sInfo.downstart){
 				if (i < 10) {
-					insertData(con, inout, 1);
+					saveData(con, inout, 1);
 					lastinout = inout;
 					continue;
 				}
 			} else if (inout.stationnum == sInfo.upend) {
 				if (i == daylist.size() - 1) {
-					insertData(con, inout, 4);
+					saveData(con, inout, 4);
 				}
 			}
 			
@@ -102,18 +133,18 @@ public class FenSpilter {
 				} else {
 					//如果存在数据混乱，则从当前点进行切分，优先判断标志位，如果没有标志位，则根据当前的数据范围进行判断
 					if (inout.stationnum == sInfo.upstart) {
-						insertData(con, daylist.get(i-1),2);
-						insertData(con, inout, 3);
+						saveData(con, daylist.get(i-1),2);
+						saveData(con, inout, 3);
 					} else if (inout.stationnum == sInfo.downstart) {
-						insertData(con, inout, 1);
-						insertData(con, daylist.get(i-1),4);
+						saveData(con, inout, 1);
+						saveData(con, daylist.get(i-1),4);
 					} else {
 						if (inout.inRangeAB(sInfo)) {
-							insertData(con, inout, 1);
-							insertData(con, daylist.get(i-1), 4);
+							saveData(con, inout, 1);
+							saveData(con, daylist.get(i-1), 4);
 						} else {
-							insertData(con, daylist.get(i-1), 2);
-							insertData(con, inout, 3);
+							saveData(con, daylist.get(i-1), 2);
+							saveData(con, inout, 3);
 						}
 					}
 					lastinout = inout;
@@ -124,7 +155,7 @@ public class FenSpilter {
 		}
 	}
 
-	public static void insertData(Connection con, InoutInfo info, int up) {
+	public static void insertData(Connection con, InoutInfo info, int upordown) {
 		String sql = "insert into tb_banci(routeid, productid, stationnum, date, time, upordown) values(?,?,?,?,?,?)";
 		try {
 			PreparedStatement ps = con.prepareStatement(sql);
@@ -133,14 +164,20 @@ public class FenSpilter {
 			ps.setInt(3, info.stationnum);
 			ps.setDate(4, new java.sql.Date(info.date.getTime()));
 			ps.setTime(5, new java.sql.Time(info.date.getTime()));
-			ps.setInt(6, up);
+			ps.setInt(6, upordown);
 			ps.execute();
 			ps.close();
-			System.out.println("insert data: " + info.rowid + "====" + info.stationnum + "====" + info.productid +"========" + info.date.toLocaleString() + "====" + up);
+			System.out.println("insert data: " + info.rowid + "====" + info.stationnum + "====" + info.productid +"========" + info.date.toLocaleString() + "====" + upordown);
 		} catch (SQLException e) {
 			e.printStackTrace();
 		}
-		
+	}
+
+	//将数据临时存储于内存中，之后重新排序或判断
+	private static List<InoutInfo> sInoutList = new ArrayList<InoutInfo>();
+	public static void saveData(Connection con, InoutInfo info, int up) {
+		info.flagUpordown = up;
+		sInoutList.add(info);
 	}
 
 	public static List<Long> getProductList(Connection con, String table) {

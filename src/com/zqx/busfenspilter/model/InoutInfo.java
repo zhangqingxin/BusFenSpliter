@@ -11,6 +11,8 @@ public class InoutInfo {
 	public Date time;
 	public int error;
 	
+	public int flagUpordown;
+	
 	public boolean inRangeAB(StationInfo si) {
 		if (stationnum >= si.downstart && stationnum <= si.downend) {
 			return true;
