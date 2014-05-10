@@ -1,12 +1,14 @@
 package com.zqx.busfenspilter;
 
 import java.sql.Connection;
+import java.sql.Date;
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.sql.Time;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -22,13 +24,16 @@ public class FenSpilter {
 
 	public static void main(String[] args) {
 		try {
-			String table = "tb_inout_gps_103";
+			String table = "tb_fen_test";
 			Connection con = DBConnector.getConnection();
 			List<Long> productList = getProductList(con, table);
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
 			for (Long productid: productList) {
 				List<InoutInfo> daylist = getBusDayRunInfoList(con, table, productid);
+				con.setAutoCommit(false);
 				processData(con, 0, daylist, stationInfoMap);
+				con.commit();
+				con.setAutoCommit(true);
 			}
 		} catch (SQLException e) {
 			e.printStackTrace();
@@ -42,75 +47,103 @@ public class FenSpilter {
 		for (int i=startnum; i<daylist.size();i++) {
 			InoutInfo inout = daylist.get(i);
 			StationInfo sInfo = stationInfoMap.get(inout.routeid);
+//			System.out.println("downStart: " + sInfo.downstart +"   downEnd: " + sInfo.downend + "    upStart: " + sInfo.upstart + "     upEnd: " + sInfo.upend);
+			if (lastinout != null && inout.stationnum == lastinout.stationnum) {
+				continue;
+			}
 			//判断是否是上行结束的标志，如果是则跳过
 			if (i==0 && inout.stationnum == sInfo.upend) {
 				continue;
+			} else if (inout.stationnum == sInfo.downstart){
+				if (i < 10) {
+					insertData(con, inout, 1);
+					lastinout = inout;
+					continue;
+				}
+			} else if (inout.stationnum == sInfo.upend) {
+				if (i == daylist.size() - 1) {
+					insertData(con, inout, 4);
+				}
 			}
 			
-			//如果Xi>Xi-1且Xi<B，判断在本班次中，则跳过
-			if (lastinout == null || (lastinout != null && inout.stationnum > lastinout.stationnum && inout.stationnum < sInfo.downend)) {
+			if (lastinout == null || (inout.stationnum > lastinout.stationnum && ((inout.inRangeAB(sInfo) && lastinout.inRangeAB(sInfo)) || (inout.inRangeCD(sInfo) && lastinout.inRangeCD(sInfo))))) {
+				//如果Xi>Xi-1且Xi<B，判断在本班次中，则跳过
 				lastinout = inout;
 				continue;
 			}
-			//如果Xi<Xi-1且Xi<B，则说明数据发生了错乱，重新进行递归
-			if (lastinout != null && inout.stationnum < lastinout.stationnum && inout.stationnum < sInfo.downend) {
-				processData(con, i, daylist, stationInfoMap);
-			}
-		}
-		
-		
-		
-		
-//		int lastStaNum = -1;
-//		InoutInfo lastInfo = null;
-//		int count = 0;
-//		
-//		boolean isRecorded = false;
-//		
-//		for (int i=startnum;i<daylist.size();i++) {
-//			StationInfo sInfo = stationInfoMap.get(daylist.get(i).routeid);
-//			InoutInfo info = daylist.get(i);
-//			if (i == 0) {
-//				if(info.stationnum != sInfo.upend) {
-//					lastStaNum = info.stationnum;
-//					insertData(info, 1);
-//					processData(con, i + 1, daylist, stationInfoMap);
-//					break;
-//				}
-//			} else {
-//				if (info.stationnum == lastStaNum) {
-//					continue;
-//				} else if (info.stationnum > lastStaNum && (info.stationnum == sInfo.downstart || info.stationnum == sInfo.upstart)) {
-//					if (info.stationnum == sInfo.downstart) {
-//						insertData(info, DOWNSTART);
-//						processData(con, i + 1, daylist, stationInfoMap);
-//						break;
-//					} else if (info.stationnum == sInfo.upstart) {
-//						insertData(info, UPSTART);
-//						processData(con, i + 1, daylist, stationInfoMap);
-//						break;
+
+			//若B没有丢失，则肯定会遇到B，若B丢失，C存在的话，则会碰到C，若C也丢失，则会碰到C下面的值
+			if ((lastinout.inRangeAB(sInfo) && inout.inRangeCD(sInfo)) || (lastinout.inRangeCD(sInfo) && inout.inRangeAB(sInfo))) {
+				//读取启动数值下面序号的10个数值，放于一个数据结构，如数组，然后对这10个值进行判别
+				int count = i + 10;
+				if (count > daylist.size()) {
+					count = daylist.size();
+				}
+				int breakpoint = -1;
+				for (int j=i+1;j<=count;j++) {
+					//FIXME:这里需要再看看，是不是这样写遇到班次不停反复是否会出问题
+					if (inout.inRangeAB(sInfo)) {
+						if (daylist.get(j).inRangeCD(sInfo)) {
+							breakpoint = j;
+						}
+					} else {
+						if (daylist.get(j).inRangeAB(sInfo)) {
+							breakpoint = j;
+						}
+					}
+				}
+				if (breakpoint > 0) {
+					//FIXME: 此处也需要考虑一下
+//					if (inout.inRangeAB(sInfo)) {
+//						insertData(daylist.get(i - 1), 2);
+//						insertData(daylist.get(breakpoint + 1), 3);
+//					} else {
+//						insertData(daylist.get(i - 1), 4);
+//						insertData(daylist.get(breakpoint + 1), 1);
 //					}
-//					lastStaNum = info.stationnum;
-//				} else if (info.stationnum > lastStaNum && info.stationnum > sInfo.downstart && info.stationnum < sInfo.downend) {
-//					lastStaNum = info.stationnum;
-//					count++;
-//					lastInfo = info;
-//					continue;
-//				} else if (info.stationnum > lastStaNum && info.stationnum > sInfo.upstart && info.stationnum < sInfo.upend) {
-//					lastStaNum = info.stationnum;
-//					count++;
-//					lastInfo = info;
-//					continue;
-//				} else if (info.stationnum < lastStaNum) {
-//					processData(con, i, daylist, stationInfoMap);
-//					break;
-//				}
-//			}
-//		}
+					lastinout = inout;
+					continue;
+				} else {
+					if (inout.stationnum == sInfo.upstart) {
+						insertData(con, daylist.get(i-1),2);
+						insertData(con, inout, 3);
+					} else if (inout.stationnum == sInfo.downstart) {
+						insertData(con, inout, 1);
+						insertData(con, daylist.get(i-1),4);
+					} else {
+						if (inout.inRangeAB(sInfo)) {
+							insertData(con, inout, 1);
+							insertData(con, daylist.get(i-1), 4);
+						} else {
+							insertData(con, daylist.get(i-1), 2);
+							insertData(con, inout, 3);
+						}
+					}
+					lastinout = inout;
+					continue;
+				}
+			}
+			
+		}
 	}
 
-	public static void insertData(InoutInfo info, int up) {
-		System.out.println(info.rowid + "====" + info.stationnum + "====" + info.productid +"========" + info.date.toLocaleString() + "====" + up);
+	public static void insertData(Connection con, InoutInfo info, int up) {
+		String sql = "insert into tb_banci(routeid, productid, stationnum, date, time, upordown) values(?,?,?,?,?,?)";
+		try {
+			PreparedStatement ps = con.prepareStatement(sql);
+			ps.setString(1, info.routeid);
+			ps.setLong(2, info.productid);
+			ps.setInt(3, info.stationnum);
+			ps.setDate(4, new java.sql.Date(info.date.getTime()));
+			ps.setTime(5, new java.sql.Time(info.date.getTime()));
+			ps.setInt(6, up);
+			ps.execute();
+			ps.close();
+			System.out.println("insert data: " + info.rowid + "====" + info.stationnum + "====" + info.productid +"========" + info.date.toLocaleString() + "====" + up);
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
 	}
 
 	public static List<Long> getProductList(Connection con, String table) {
