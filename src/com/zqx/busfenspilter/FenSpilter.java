@@ -72,38 +72,33 @@ public class FenSpilter {
 				continue;
 			}
 
-			//若B没有丢失，则肯定会遇到B，若B丢失，C存在的话，则会碰到C，若C也丢失，则会碰到C下面的值
+			//如果当前数据与前一条数据对比不是同一个班次了，则从当前按数据开始，向后读取10条数据
 			if ((lastinout.inRangeAB(sInfo) && inout.inRangeCD(sInfo)) || (lastinout.inRangeCD(sInfo) && inout.inRangeAB(sInfo))) {
-				//读取启动数值下面序号的10个数值，放于一个数据结构，如数组，然后对这10个值进行判别
+				//读取启动数值下面序号的10个数值，然后对这10个值进行判别
 				int count = i + 10;
 				if (count > daylist.size()) {
 					count = daylist.size();
 				}
 				int breakpoint = -1;
 				for (int j=i+1;j<=count;j++) {
-					//FIXME:这里需要再看看，是不是这样写遇到班次不停反复是否会出问题
+					//判断，如果当前数据是在下行班次中，而且向下读取的数据存在上行班次的数据，则记录最后一个上行数据的位置
 					if (inout.inRangeAB(sInfo)) {
 						if (daylist.get(j).inRangeCD(sInfo)) {
 							breakpoint = j;
 						}
 					} else {
+						//判断，如果当前数据是在上行班次中，而且向下读取的数据存在下行班次的数据，则记录最后一个下行数据的位置
 						if (daylist.get(j).inRangeAB(sInfo)) {
 							breakpoint = j;
 						}
 					}
 				}
 				if (breakpoint > 0) {
-					//FIXME: 此处也需要考虑一下
-//					if (inout.inRangeAB(sInfo)) {
-//						insertData(daylist.get(i - 1), 2);
-//						insertData(daylist.get(breakpoint + 1), 3);
-//					} else {
-//						insertData(daylist.get(i - 1), 4);
-//						insertData(daylist.get(breakpoint + 1), 1);
-//					}
+					//如果没有混乱的数据，则直接继续处理下一条数据
 					lastinout = inout;
 					continue;
 				} else {
+					//如果存在数据混乱，则从当前点进行切分，优先判断标志位，如果没有标志位，则根据当前的数据范围进行判断
 					if (inout.stationnum == sInfo.upstart) {
 						insertData(con, daylist.get(i-1),2);
 						insertData(con, inout, 3);
