@@ -84,21 +84,32 @@ public class FenSpilter {
 			if (lastinout != null && inout.stationnum == lastinout.stationnum) {
 				continue;
 			}
-			//判断是否是上行结束的标志，如果是则跳过
-			if (i==0 && inout.stationnum == sInfo.upend) {
+			//处理首尾数据
+			if (i<=1 && (inout.stationnum == sInfo.upend || inout.stationnum == sInfo.downend)) {
 				continue;
-			} else if (inout.stationnum == sInfo.downstart){
-				if (i < 10) {
+			} else if (i < 10 && (inout.stationnum == sInfo.downstart || inout.stationnum == sInfo.upstart)){
+				if (inout.inRangeAB(sInfo)) {
 					saveData(con, inout, 1);
-					lastinout = inout;
-					continue;
+				} else {
+					saveData(con, inout, 3);
 				}
-			} else if (inout.stationnum == sInfo.upend) {
-				if (i == daylist.size() - 1) {
-					saveData(con, inout, 4);
+				lastinout = inout;
+				continue;
+			} else if (inout.stationnum == sInfo.downstart && inout.stationnum == sInfo.upend || inout.stationnum == sInfo.downend || inout.stationnum == sInfo.upstart) {
+				if (i > daylist.size() - 3) {
+					if (inout.stationnum == sInfo.upend) {
+						saveData(con, inout, 4);
+						lastinout = inout;
+					} else if (inout.stationnum == sInfo.downend) {
+						saveData(con, inout, 2);
+						lastinout = inout;
+					} else {
+						continue;
+					}
 				}
 			}
 			
+			//处理正常情况
 			if (lastinout == null || (inout.stationnum > lastinout.stationnum && ((inout.inRangeAB(sInfo) && lastinout.inRangeAB(sInfo)) || (inout.inRangeCD(sInfo) && lastinout.inRangeCD(sInfo))))) {
 				//如果Xi>Xi-1且Xi<B，判断在本班次中，则跳过
 				lastinout = inout;
