@@ -1,6 +1,7 @@
 package com.zqx.busfenspilter.model;
 
-import java.util.Date;
+import java.sql.Time;
+import java.sql.Date;
 
 public class InoutInfo {
 	public long rowid;
@@ -8,7 +9,7 @@ public class InoutInfo {
 	public String routeid;
 	public int stationnum;
 	public Date date;
-	public Date time;
+	public Time time;
 	public int error;
 	
 	public int flagUpordown;

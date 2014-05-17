@@ -8,6 +8,7 @@ import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
 
@@ -20,17 +21,49 @@ public class FenSpilter {
 	public static final int DOWNEND = 2;
 	public static final int UPSTART = 3;
 	public static final int UPEND = 4;
-
+	
+	public static final String[] TABLE_LIST = new String[]{"tb_inout_gps_0326_gpsmixed","tb_inout_gps_0327_gpsmixed","tb_inout_gps_0328_gpsmixed","tb_inout_gps_0329_gpsmixed","tb_inout_gps_0330_gpsmixed"
+		,"tb_inout_gps_0331_gpsmixed","tb_inout_gps_0401_gpsmixed","tb_inout_gps_0402_gpsmixed","tb_inout_gps_0403_gpsmixed","tb_inout_gps_0404_gpsmixed","tb_inout_gps_0405_gpsmixed",
+		"tb_inout_gps_0406_gpsmixed","tb_inout_gps_0407_gpsmixed","tb_inout_gps_0408_gpsmixed","tb_inout_gps_0409_gpsmixed","tb_inout_gps_0410_gpsmixed","tb_inout_gps_0411_gpsmixed",
+		"tb_inout_gps_0412_gpsmixed","tb_inout_gps_0413_gpsmixed","tb_inout_gps_0414_gpsmixed","tb_inout_gps_0415_gpsmixed","tb_inout_gps_0416_gpsmixed","tb_inout_gps_0417_gpsmixed",
+		"tb_inout_gps_0418_gpsmixed","tb_inout_gps_0419_gpsmixed","tb_inout_gps_0420_gpsmixed","tb_inout_gps_0421_gpsmixed","tb_inout_gps_0422_gpsmixed","tb_inout_gps_0423_gpsmixed",
+		"tb_inout_gps_0424_gpsmixed","tb_inout_gps_0425_gpsmixed"};
+	
+//	public static final String[] TABLE_LIST = new String[]{"tb_inout_gps_0326_gpsmixed","tb_inout_gps_0327_gpsmixed","tb_inout_gps_0328_gpsmixed","tb_inout_gps_0329_gpsmixed","tb_inout_gps_0330_gpsmixed"
+//		,"tb_inout_gps_0331_gpsmixed"};
+	
 	public static void main(String[] args) {
-		String table = "tb_inout_gps_0327_gpsmixed";
 		long time = System.currentTimeMillis();
-	    fenData(table);
+		for (int i=0;i<TABLE_LIST.length;i++) {
+			String table = TABLE_LIST[i];
+			Connection con = null;
+			try {
+				con = DBConnector.getConnection();
+				preProcess(con, table);
+				fenData(con, table);
+			} catch (SQLException e) {
+				e.printStackTrace();
+			}
+		}
 	    System.out.println("Total Time: " + (System.currentTimeMillis() - time) + "ms");
 	}
 
-	public static void fenData(String table) {
+	public static void preProcess(Connection con, String table) {
+		String sourceTableIndex1 = "create index "+table+"_index_productid on "+table+"(productid)";
+		String sourceTableIndex2 = "create index "+table+"_index_productid_time on "+table+"(productid,time)";
 		try {
-			Connection con = DBConnector.getConnection();
+			Statement s = con.createStatement();
+			s.execute(sourceTableIndex1);
+			s.execute(sourceTableIndex2);
+			s.close();
+		} catch (SQLException e) {
+			e.printStackTrace();
+		}
+		
+	}
+
+	public static void fenData(Connection con, String table) {
+		try {
 			List<Long> productList = getProductList(con, table);
 			HashMap<String, StationInfo> stationInfoMap = getStationInfoMap(con);
 			long time = System.currentTimeMillis();
@@ -74,7 +107,12 @@ public class FenSpilter {
 				
 				//数据重新按照时间排序
 				Collections.sort(sInoutList, new ComparatorTime());
+				String[] tt = table.split("_");
+				String dateStr = tt[3];
+				Calendar c = Calendar.getInstance();
+				c.set(2014, (Integer.valueOf(dateStr.substring(1, 2))-1), Integer.valueOf(dateStr.substring(2, 4)),0,0,0);
 				for (InoutInfo info: sInoutList) {
+					info.date = new java.sql.Date(c.getTime().getTime());
 					insertData(con, info, info.flagUpordown);
 				}
 				
@@ -194,8 +232,8 @@ public class FenSpilter {
 			ps.setString(1, info.routeid);
 			ps.setLong(2, info.productid);
 			ps.setInt(3, info.stationnum);
-			ps.setDate(4, new java.sql.Date(info.date.getTime()));
-			ps.setTime(5, new java.sql.Time(info.date.getTime()));
+			ps.setDate(4, info.date);
+			ps.setTime(5, info.time);
 			ps.setInt(6, upordown);
 			ps.execute();
 			ps.close();
@@ -266,10 +304,8 @@ public class FenSpilter {
 				info.productid = rs.getLong("PRODUCTID");
 				info.routeid = rs.getString("ROUTEID");
 				info.stationnum = rs.getInt("STATIONSEQNUM");
-				c.setTime(rs.getDate("date"));
-				String[] time = rs.getTime("time").toString().split(":");
-				c.set(c.get(Calendar.YEAR), c.get(Calendar.MONTH), c.get(Calendar.DAY_OF_MONTH), Integer.valueOf(time[0]), Integer.valueOf(time[1]), Integer.valueOf(time[2]));
-				info.date = c.getTime();
+				info.date = rs.getDate("DATE");
+				info.time = rs.getTime("TIME");
 				list.add(info);
 			}
 			rs.close();
